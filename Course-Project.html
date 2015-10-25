@@ -1,0 +1,140 @@
+#Practical Machine Learning Course Project
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which they did the exercise. 
+
+##Loading the data and neccesary packages 
+
+```{r}
+training<-read.table("pml-training.csv", header=TRUE, sep=",")
+testing<-read.table("pml-testing.csv",header=TRUE, sep=",")
+```
+
+```{r}
+library('caret')
+```
+
+```{r}
+library(rattle)
+```
+
+```{r}
+library(gridExtra)
+```
+
+##Cleaning the training data set
+
+```{r}
+trainingaccel<-grepl("^accel",names(training))
+trainingtotal<-grepl("^total",names(training))
+roll<-grepl("^roll",names(training))
+pitch<-grepl("^pitch",names(training))
+yaw<-grepl("^yaw",names(training))
+magnet<-grepl("^magnet",names(training))
+gyro<-grepl("^gyro",names(training))
+acceldata<-training[ ,trainingaccel]
+rolldata<-training[ ,roll]
+pitchdata<-training[ ,pitch]
+yawdata<-training[,yaw]
+magnetdata<-training[,magnet]
+gyrodata<-training[,gyro]
+totaldata<-training[,trainingtotal]
+trainClasse<-cbind(acceldata,rolldata,pitchdata,yawdata,magnetdata,gyrodata,totaldata,training[ ,160])
+colnames(trainClasse)[53]<-'Classe'
+```
+
+##Cleaning the testing data set
+
+```{r}
+testingaccel<-grepl("^accel",names(testing))
+testingtotal<-grepl("^total",names(testing))
+troll<-grepl("^roll",names(testing))
+tpitch<-grepl("^pitch",names(testing))
+tyaw<-grepl("^yaw",names(testing))
+tmagnet<-grepl("^magnet",names(testing))
+tgyro<-grepl("^gyro",names(testing))
+tacceldata<-testing[ ,testingaccel]
+trolldata<-testing[ ,troll]
+tpitchdata<-testing[,tpitch]
+tyawdata<-testing[,tyaw]
+tmagnetdata<-testing[,tmagnet]
+tgyrodata<-testing[,tgyro]
+ttotaldata<-testing[,testingtotal]
+testClasse<-cbind(tacceldata,trolldata,tpitchdata,tyawdata,tmagnetdata,tgyrodata,ttotaldata,testing[ ,160])
+colnames(testClasse)[53]<-'problem.id'
+```
+
+##Creating a training and testing subset 
+
+```{r}
+set.seed(400)
+inTrain = createDataPartition(trainClasse$Classe, p = .60)[[1]]
+trainingsubset = trainClasse[ inTrain,]
+testingsubset = trainClasse[-inTrain,]
+```
+
+##rPart Model 
+
+```{r}
+set.seed(400)
+modFit<-train(Classe~.,method="rpart", data=trainingsubset)
+```
+
+```{r}
+fancyRpartPlot(modFit$finalModel,cex=.5,under.cex=1,shadow.offset=0)
+```
+
+```{r}
+classepredict=predict(modFit,testingsubset)
+confusionMatrix(testingsubset$Classe,classepredict)
+```
+
+In testing this model on the testing subset, it is revealed to have a 54.6% accuracy (only slightly better than chance). The variables used in the algorithm include roll_belt, pitch_forearm, yaw_belt,magnet_dumbbell_Z,pitch_belt, and magnet_dumbell_x. 
+
+##Random Forest Model
+
+We see that the rpart model was not as accurate as we hoped. We now do a random forest model to see if that method will better fit the data.
+
+```{r}
+set.seed(400)
+modFit2 <- train(Classe ~ ., method="rf",trControl=trainControl(method = "cv", number = 4), data=trainingsubset)
+```
+
+```{r}
+print(modFit2)
+```
+
+```{r}
+varImp(modFit2)
+```
+
+```{r}
+classepredict2=predict(modFit2,testingsubset)
+confusionMatrix(testingsubset$Classe,classepredict2)
+```
+
+The random forest model has a 99.2% accuracy, far superior to the rpart method. The specificity and sensitivity is in the high 90s for all variables. The top five variables of importance included the roll_belt, yaw_belt,magnet_dumbbell_z,magnet_dumbbell_y, and the pitch_forearm.
+
+##In Sample & Out of Sample Error 
+
+The in sample error is when the model is used to predict the training set it is based off of. This error is going to be much less than the model predicting another dataset (out of sample error). 
+
+```{r}
+insamplepredict=predict(modFit2,trainingsubset)
+confusionMatrix(trainingsubset$Classe,insamplepredict)
+```
+
+```{r}
+classepredict2=predict(modFit2,testingsubset)
+confusionMatrix(testingsubset$Classe,classepredict2)
+```
+
+Based on what we see above, the testing on a new set of data shows accuracy.
+
+```{r}
+testinganswers=predict(modFit2, newdata=testing)
+print(testinganswers)
+```
+
+##Conclusion 
+
+As we can see from above, the Random Forest was a better model for prediction of exercise quality compared to rpart. The nominal categories were dependent on various variables and the interaction between them. The Random Forest model had over 99% accuracy and fitted well to other subsamples of the data.
